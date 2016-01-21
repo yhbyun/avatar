@@ -3,6 +3,7 @@
 namespace Laravolt\Avatar;
 
 use Illuminate\Cache\CacheManager;
+use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Intervention\Image\Facades\Image;
@@ -27,16 +28,34 @@ class Avatar
     protected $borderColor;
     protected $initials = '';
     protected $ascii = false;
+    protected $cachePath;
 
+    /**
+     * @var CacheManager
+     */
     protected $cache;
+
+    /**
+     * @var Filesystem
+     */
+    private $files;
 
     /**
      * Avatar constructor.
      *
      * @param array $config
      * @param CacheManager $cache
+     * @param Filesystem $files
      */
-    public function __construct(array $config, CacheManager $cache)
+    public function __construct(array $config, CacheManager $cache, Filesystem $files)
+    {
+        $this->cache = $cache;
+        $this->files = $files;
+
+        $this->setUp($config);
+    }
+
+    private function setUp(array $config)
     {
         $this->shape = Arr::get($config, 'shape', 'circle');
         $this->chars = Arr::get($config, 'chars', 2);
@@ -49,8 +68,21 @@ class Avatar
         $this->ascii = Arr::get($config, 'ascii', false);
         $this->borderSize = Arr::get($config, 'border.size');
         $this->borderColor = Arr::get($config, 'border.color');
+        $this->cachePath = Arr::get($config, 'cachePath');
 
-        $this->cache = $cache;
+        $this->checkCacheDirectory();
+    }
+
+    /**
+     * Check/Create cache directory
+     */
+    private function checkCacheDirectory()
+    {
+        if ($this->cachePath) {
+            if (!$this->files->isDirectory($this->cachePath)) {
+                $this->files->makeDirectory($this->cachePath);
+            }
+        }
     }
 
     public function create($name)
@@ -70,7 +102,7 @@ class Avatar
             $this->name = $this->name->toAscii();
         }
 
-        $this->initials = $this->getInitials();
+        $this->initials = self::buildInitials($this->name, $this->chars);
         $this->setFont();
         $this->setForeground($this->getRandomForeground());
         $this->setBackground($this->getRandomBackground());
@@ -85,6 +117,32 @@ class Avatar
 
             return $this->image->encode('data-url');
         });
+    }
+
+    public function display($quality = 90)
+    {
+        $path = $this->cachePath . DIRECTORY_SEPARATOR . $this->cacheKey() . '.png';
+        if ($this->files->exists($path)) {
+            return $this->sendImage($path);
+        }
+
+        $this->save($path, $quality);
+
+        return $this->sendImage($path);
+    }
+
+    private function sendImage($path)
+    {
+        $image = $this->files->get($path);
+
+        return response()->make($image, 200, [
+            'Content-Type' => 'image/png',
+            'Cache-Control' => 'public, max-age=157788000', // about 5 years
+            'Content-Length' => $this->files->size($path),
+            'Last-Modified' => 'Tue, 11 Jan 2000 00:57:26 GMT',
+            'Expires' => date(DATE_RFC822, strtotime("720 day")),
+            'Vary' => 'Accept-Encoding',
+        ]);
     }
 
     public function save($path, $quality = 90)
@@ -141,14 +199,22 @@ class Avatar
         return $this;
     }
 
-    protected function getInitials()
+    public static function getInitials($name, $len = 2)
     {
-        $words = new Collection(explode(' ', $this->name));
+        $name = Stringy::create($name)->collapseWhitespace();
+
+        return self::buildInitials($name, $len);
+    }
+
+    protected static function buildInitials(Stringy $name, $len = 2)
+    {
+        $name = $name->toUpperCase();
+        $words = new Collection(explode(' ', $name));
 
         // if name contains single word, use first N character
         if ($words->count() === 1) {
-            if ($this->name->length() >= $this->chars) {
-                return $this->name->substr(0, $this->chars);
+            if ($name->length() >= $len) {
+                return $name->substr(0, $len);
             }
 
             return (string)$words->first();
@@ -160,7 +226,7 @@ class Avatar
             $initials->push(Stringy::create($word)->substr(0, 1));
         });
 
-        return $initials->slice(0, $this->chars)->implode('');
+        return $initials->slice(0, $len)->implode('');
     }
 
     protected function getRandomBackground()
@@ -199,7 +265,7 @@ class Avatar
 
     protected function setFont()
     {
-        $initials = $this->getInitials();
+        $initials = $this->initials;
 
         if ($initials) {
             $number = ord($initials[0]);
