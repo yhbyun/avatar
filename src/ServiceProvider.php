@@ -19,7 +19,7 @@ class ServiceProvider extends BaseServiceProvider
      *
      * @var bool
      */
-    protected $defer = false;
+    protected $defer = true;
 
     /**
      * Register the service provider.
@@ -30,11 +30,11 @@ class ServiceProvider extends BaseServiceProvider
      */
     public function register()
     {
-        $this->app->bind('avatar', function ($app) {
+        $this->app->singleton('avatar', function ($app) {
             $config = $app->make('config');
             $cache = $app->make('cache');
 
-            return new Avatar($config->get('avatar'), $cache);
+            return new Avatar($config->get('avatar'), $cache, $app->make('files'));
         });
     }
 
@@ -75,7 +75,8 @@ class ServiceProvider extends BaseServiceProvider
     protected function registerConfigurations()
     {
         $this->mergeConfigFrom(
-            $this->packagePath('config/config.php'), 'avatar'
+            $this->packagePath('config/config.php'),
+            'avatar'
         );
         $this->publishes([
             $this->packagePath('config/config.php') => config_path('avatar.php'),
@@ -92,5 +93,15 @@ class ServiceProvider extends BaseServiceProvider
     protected function packagePath($path = '')
     {
         return sprintf('%s/../%s', __DIR__, $path);
+    }
+
+    /**
+     * Get the services provided by the provider.
+     *
+     * @return array
+     */
+    public function provides()
+    {
+        return ['avatar'];
     }
 }
