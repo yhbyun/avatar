@@ -3,6 +3,7 @@
 namespace Laravolt\Avatar;
 
 use Illuminate\Cache\CacheManager;
+use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Arr;
 use Intervention\Image\AbstractFont;
 use Intervention\Image\AbstractShape;
@@ -37,14 +38,22 @@ class Avatar
     protected $fontFolder;
     protected $defaultFont = 5;
 
+    protected $cachePath;
+
+    /**
+     * @var Filesystem
+     */
+    protected $files;
+
     /**
      * Avatar constructor.
      *
-     * @param array            $config
-     * @param CacheManager     $cache
+     * @param array $config
+     * @param CacheManager $cache
      * @param InitialGenerator $initialGenerator
+     * @param Filesystem $files
      */
-    public function __construct(array $config, CacheManager $cache, InitialGenerator $initialGenerator)
+    public function __construct(array $config, CacheManager $cache, InitialGenerator $initialGenerator, Filesystem $files)
     {
         $this->shape = Arr::get($config, 'shape', 'circle');
         $this->chars = Arr::get($config, 'chars', 2);
@@ -60,6 +69,23 @@ class Avatar
 
         $this->cache = $cache;
         $this->initialGenerator = $initialGenerator->setUppercase(Arr::get($config, 'uppercase'));
+
+        $this->files = $files;
+        $this->cachePath = Arr::get($config, 'cachePath');
+
+        $this->checkCacheDirectory();
+    }
+
+    /**
+     * Check/Create cache directory
+     */
+    private function checkCacheDirectory()
+    {
+        if ($this->cachePath) {
+            if (!$this->files->isDirectory($this->cachePath)) {
+                $this->files->makeDirectory($this->cachePath);
+            }
+        }
     }
 
     /**
@@ -106,6 +132,32 @@ class Avatar
 
             return $this->image->encode('data-url');
         });
+    }
+
+    public function display($quality = 90)
+    {
+        $path = $this->cachePath . DIRECTORY_SEPARATOR . $this->cacheKey() . '.png';
+        if ($this->files->exists($path)) {
+            return $this->sendImage($path);
+        }
+
+        $this->save($path, $quality);
+
+        return $this->sendImage($path);
+    }
+
+    private function sendImage($path)
+    {
+        $image = $this->files->get($path);
+
+        return response()->make($image, 200, [
+            'Content-Type' => 'image/png',
+            'Cache-Control' => 'public, max-age=157788000', // about 5 years
+            'Content-Length' => $this->files->size($path),
+            'Last-Modified' => 'Tue, 11 Jan 2000 00:57:26 GMT',
+            'Expires' => date(DATE_RFC822, strtotime("720 day")),
+            'Vary' => 'Accept-Encoding',
+        ]);
     }
 
     public function save($path, $quality = 90)

@@ -77,4 +77,6 @@ return [
         // or any valid hex ('#aabbcc')
         'color' => 'foreground',
     ],
+
+    'cachePath' => storage_path('app/avatar'),
 ];

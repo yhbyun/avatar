@@ -24,8 +24,9 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->bind('avatar', function (Application $app) {
             $config = $app->make('config');
             $cache = $app->make('cache');
+            $files = $app->make('files');
 
-            $avatar = new Avatar($config->get('avatar'), $cache, new InitialGenerator());
+            $avatar = new Avatar($config->get('avatar'), $cache, new InitialGenerator(), $files);
 
             // list of folder to scan where font located, order by priority
             $fontFolder = [
