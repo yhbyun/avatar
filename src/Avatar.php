@@ -111,6 +111,16 @@ class Avatar
         return $this;
     }
 
+    public function createWithInitials($initials)
+    {
+        $this->initials = $initials;
+
+        $this->setForeground($this->getRandomForeground());
+        $this->setBackground($this->getRandomBackground());
+
+        return $this;
+    }
+
     public function setFontFolder($folders)
     {
         $this->fontFolder = $folders;
