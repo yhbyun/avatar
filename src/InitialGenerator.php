@@ -43,7 +43,8 @@ class InitialGenerator
 
         if (filter_var($name, FILTER_VALIDATE_EMAIL)) {
             // turn bayu.hendra@gmail.com into "Bayu Hendra"
-            $name = current($name->split('@', 1))->replace('.', ' ');
+            //$name = current($name->split('@', 1))->replace('.', ' ');
+            $name = Stringy::create(current(explode('@', $name)))->replace('.', ' ');
         }
 
         if ($this->ascii) {
