@@ -252,7 +252,7 @@ class Avatar
 
         $initials = $this->getInitial();
 
-        if ($initials) {
+        if ($initials !== '') {
             $number = ord($initials[0]);
             $font = $this->fonts[$number % count($this->fonts)];
 
